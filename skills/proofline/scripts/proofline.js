@@ -44,7 +44,7 @@ const VALID_LANES = ["browser", "frontend-state", "dom", "framework", "all"];
 // Lanes are named after the question they answer, not the library that answers it. Humans still say
 // "react", so it is accepted as input and resolved to the lane it means.
 const LANE_ALIASES = { react: "frontend-state", redux: "frontend-state", state: "frontend-state", servicenow: "framework", gform: "framework" };
-const PROBE_PATH = path.join(__dirname, "..", "scripts", "probe.js");
+const PROBE_PATH = path.join(__dirname, "probe.js");
 
 function readProbeSource() {
 	if (!fs.existsSync(PROBE_PATH)) {

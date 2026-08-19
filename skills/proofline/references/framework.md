@@ -6,12 +6,17 @@ it, and the stack of the script that made the call.
 
 | Adapter | Status | Mechanism |
 |---|---|---|
-| `servicenow` | shipped | wraps `window.g_form` methods; dumps `g_scratchpad` |
+| `servicenow` | **experimental** | wraps `window.g_form` methods; dumps `g_scratchpad` |
 | others | not implemented | any app exposing a global form/API object fits the same shape |
 
 ```bash
 proofline arm browser framework          # aliases: servicenow, gform
 ```
+
+> **Experimental.** The adapter is verified against a simulated `g_form` — it hooks, records the call
+> with its stack, and calls through without changing behaviour — but not yet against a live
+> ServiceNow instance. Expect the method list and the iframe handling to need adjusting on first
+> real contact.
 
 ## What it records
 

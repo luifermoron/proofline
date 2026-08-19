@@ -32,7 +32,7 @@ attacker-chosen code locally. Enable it deliberately, for the session where it i
 
 ## How this project limits its own surface
 
-- **The CLI prints; it never executes.** `bin/proofline.js` reads one local file, does string
+- **The CLI prints; it never executes.** `skills/proofline/scripts/proofline.js` reads one local file, does string
   assembly, and writes to stdout. It opens no sockets, spawns no processes, and touches nothing
   outside the repository.
 - **The emitted snippet is short, deterministic and reviewable.** Same input always yields the same

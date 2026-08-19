@@ -1,0 +1,10 @@
+{
+	"$schema": "https://skills.sh/schemas/skills.sh.schema.json",
+	"groupings": [
+		{
+			"title": "Runtime tracing",
+			"description": "Capture a timestamped runtime trace across browser, frontend state, DOM, framework and database while a human drives the app.",
+			"skills": ["proofline"]
+		}
+	]
+}

@@ -2,9 +2,31 @@
 	"name": "proofline",
 	"version": "1.0.0",
 	"description": "One clock. Every layer. Follow the proof: find the bug or understand how it works.",
-	"bin": { "proofline": "./bin/proofline.js" },
+	"bin": {
+		"proofline": "./skills/proofline/scripts/proofline.js"
+	},
 	"author": "Luis Morón <contact@luifermoron.com>",
 	"license": "MIT",
-	"keywords": ["claude-code", "skill", "playwright", "mcp", "debugging", "redux", "tracing"],
-	"engines": { "node": ">=18" }
+	"keywords": [
+		"claude-code",
+		"skill",
+		"playwright",
+		"mcp",
+		"debugging",
+		"redux",
+		"tracing"
+	],
+	"engines": {
+		"node": ">=18"
+	},
+	"files": [
+		"skills",
+		"README.md",
+		"SECURITY.md",
+		"LICENSE"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/luifermoron/proofline.git"
+	}
 }

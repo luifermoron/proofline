@@ -19,7 +19,7 @@ on every load and cannot order events across a navigation.
 ## Start with the summary, always
 
 ```bash
-node bin/proofline.js summary
+node <skill>/scripts/proofline.js summary
 ```
 
 ```json
@@ -32,9 +32,9 @@ tells you the human reloaded twice — which is often itself the finding.
 ## Then filter
 
 ```bash
-node bin/proofline.js read 'net-|state-change'
-node bin/proofline.js read 'value-changed|dom-removed'
-node bin/proofline.js read 'error|rejection|console-'
+node <skill>/scripts/proofline.js read 'net-|state-change'
+node <skill>/scripts/proofline.js read 'value-changed|dom-removed'
+node <skill>/scripts/proofline.js read 'error|rejection|console-'
 ```
 
 The filter is a regex over `type`.

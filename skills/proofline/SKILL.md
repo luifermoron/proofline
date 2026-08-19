@@ -23,7 +23,7 @@ supported way to build the snippet, because it bakes in the configuration and th
 | "arm proofline" / "arm the probes" / "start logging" (unqualified) | `browser frontend-state` (the default) |
 | "arm the browser" | `browser` |
 | "watch this field" / a blank-value bug | add `dom` with `--selector=` |
-| "arm servicenow" / a `g_form` app | `browser framework` |
+| "arm servicenow" / a `g_form` app | `browser framework` (adapter is experimental — say so) |
 | "arm the database" | see `references/database.md` — a separate mechanism |
 
 `browser` and `frontend-state` are the persistent lanes: they are registered on the Playwright **context**
@@ -45,9 +45,11 @@ Then say: *"Browser is open — navigate to the screen and log in. Tell me when 
 
 **2. Build the snippet.**
 
+`<skill>` is this skill's own directory — the one holding this file.
+
 ```bash
-node <repo>/bin/proofline.js arm browser frontend-state
-node <repo>/bin/proofline.js arm all --selector='#status, [name$=".state"]' --slices=form,navigation
+node <skill>/scripts/proofline.js arm browser frontend-state
+node <skill>/scripts/proofline.js arm all --selector='#status, [name$=".state"]' --slices=form,navigation
 ```
 
 **3. Arm it.** Paste the CLI's entire output as the `code` argument of
@@ -75,8 +77,8 @@ survives all of it. Do the thing that breaks, then tell me."*
 **5. Read it back.** In one message, in parallel:
 
 ```bash
-node <repo>/bin/proofline.js summary                  # → browser_evaluate: counts by type, run span
-node <repo>/bin/proofline.js read 'net-|state-change' # → browser_evaluate: the filtered timeline
+node <skill>/scripts/proofline.js summary                  # → browser_evaluate: counts by type, run span
+node <skill>/scripts/proofline.js read 'net-|state-change' # → browser_evaluate: the filtered timeline
 ```
 
 plus `browser_console_messages { level: "error" }` and `browser_network_requests { static: false }`
@@ -93,7 +95,7 @@ load."* State the chain you can see; flag what you cannot.
 that context and quietly follows the human into unrelated work.
 
 ```bash
-node <repo>/bin/proofline.js disarm
+node <skill>/scripts/proofline.js disarm
 ```
 
 ## Traps this encodes

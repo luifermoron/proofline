@@ -42,7 +42,7 @@ rendered"* from *"it rendered and something hid it"* — a distinction that cost
 > exists.
 
 ```bash
-node bin/proofline.js arm all --selector='#status, [name$=".state"], [data-testid="amount"]'
+node <skill>/scripts/proofline.js arm all --selector='#status, [name$=".state"], [data-testid="amount"]'
 ```
 
 Keep the selector narrow. `input, select, textarea` on a large form will fill the 4000-event budget

@@ -63,7 +63,7 @@ each `state-change` event names the changed slices with a 300-char preview of ea
 When you already know which slices matter:
 
 ```bash
-node bin/proofline.js arm react --slices=form,navigation,currentRecord
+node <skill>/scripts/proofline.js arm frontend-state --slices=form,navigation,currentRecord
 ```
 
 Named slices get a 1200-char preview instead. Naming slices also stops an unrelated slice that
@@ -75,7 +75,7 @@ you never have to guess them from the source.
 ## Reading it
 
 ```bash
-node bin/proofline.js read 'store-'
+node <skill>/scripts/proofline.js read 'state-'
 ```
 
 Each event: `{ t, load, at, type: "state-change", adapter: "redux", changed: "form,ui", state: { form: "…", ui: "…" } }`

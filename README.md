@@ -131,29 +131,37 @@ equivalent one.
 
 ## 📦 Install
 
-Clone, then link the skill into Claude Code:
+```bash
+npx skills add luifermoron/proofline
+```
+
+That is the whole thing. The [`skills` CLI](https://skills.sh) uses GitHub as its registry — nothing
+is published to npm — so it resolves `owner/repo`, finds the skill under `skills/`, and copies it
+into your agent's skills directory. Add `-g` to install globally rather than into the current
+project; it detects which coding agents you have and asks if it cannot tell.
+
+Works with any agent that reads the [Agent Skills](https://agentskills.io) `SKILL.md` format —
+Claude Code, Cursor, Codex, Copilot and others.
+
+### Without the CLI
+
+Clone and symlink. A symlink beats a copy: pull the repo and every project gets the update.
 
 ```bash
 git clone https://github.com/luifermoron/proofline.git ~/Projects/proofline
 
-# available in every project
-ln -s ~/Projects/proofline ~/.claude/skills/proofline
-
-# or, just this project
-ln -s ~/Projects/proofline <your-project>/.claude/skills/proofline
+ln -s ~/Projects/proofline/skills/proofline ~/.claude/skills/proofline          # every project
+ln -s ~/Projects/proofline/skills/proofline <your-project>/.claude/skills/proofline   # just this one
 ```
-
-A symlink is preferable to a copy — pull the repo and every project gets the update.
 
 Optionally put the CLI on your `PATH`:
 
 ```bash
-chmod +x ~/Projects/proofline/bin/proofline.js
-ln -s ~/Projects/proofline/bin/proofline.js /usr/local/bin/proofline
+ln -s ~/Projects/proofline/skills/proofline/scripts/proofline.js /usr/local/bin/proofline
 ```
 
-Verify Claude Code sees it: run `/skill-doctor`, or just say _"arm proofline"_ and check it loads
-`proofline` rather than improvising.
+Verify your agent picked it up: run `/skill-doctor`, or just say _"arm proofline"_ and check it
+loads `proofline` rather than improvising.
 
 ---
 
@@ -228,9 +236,10 @@ any point; it is the same log, read at a different altitude.
   Aliases: `react`, `redux`, `state`. _Persistent._
 - 🧬 **dom** — MutationObserver for mount/unmount and visibility, plus a 100ms value poll over a CSS
   selector you supply. Noisy; opt in. _Persistent._
-- 🔧 **framework** — _what the framework itself was told to do, and by whom._ Ships the `servicenow`
-  adapter: wraps 15 `g_form` methods (`setDisplay`, `setValue`, `setSectionDisplay`…) and records each
-  call with its stack, plus `g_scratchpad`. Aliases: `servicenow`, `gform`. _Persistent._
+- 🔧 **framework** — _what the framework itself was told to do, and by whom._ Ships an
+  **experimental** `servicenow` adapter: wraps 15 `g_form` methods (`setDisplay`, `setValue`,
+  `setSectionDisplay`…) and records each call with its stack, plus `g_scratchpad`. Aliases:
+  `servicenow`, `gform`. _Persistent._
 - 🗄️ **database** — _what rows changed, and in what order._ Postgres audit triggers capturing every
   row version with `txid` and `backend_pid`. Manual SQL, dev databases only. See
   `references/database.md`.
