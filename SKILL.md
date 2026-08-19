@@ -23,6 +23,7 @@ supported way to build the snippet, because it bakes in the configuration and th
 | "arm proofline" / "arm the probes" / "start logging" (unqualified) | `browser frontend-state` (the default) |
 | "arm the browser" | `browser` |
 | "watch this field" / a blank-value bug | add `dom` with `--selector=` |
+| "arm servicenow" / a `g_form` app | `browser framework` |
 | "arm the database" | see `references/database.md` — a separate mechanism |
 
 `browser` and `frontend-state` are the persistent lanes: they are registered on the Playwright **context**
@@ -111,10 +112,19 @@ node <repo>/bin/proofline.js disarm
   selector.
 - **`browser_run_code_unsafe` has no `require` and no filesystem.** Its `path` argument fails with
   `__fn__ is not a function`. Everything must arrive as inline `code` — which is what the CLI prints.
+- **Never clear `__proofline_off` from the init script.** The probe reads that key at document-start,
+  so anything clearing it on load runs first and defeats `disarm` entirely. `arm` clears it once from
+  the machine side.
+- **Disarm before re-arming with different lanes.** Init scripts stack and cannot be unregistered;
+  the first registration wins the wrappers while the second rewrites stored config, so the two
+  disagree. A `probe-config-ignored` event in the log means exactly this happened.
+- **Read before you disarm.** `disarm` clears the log along with the config — deliberate, since the
+  log can hold response bodies, but it means the trace is gone once you stop.
 
 ## References
 
 - `references/frontend-state.md` — adapters, finding the store, slice signatures, blind spots
 - `references/browser-dom.md` — the DOM/value/CSS lane, iframes, framework method hooking
+- `references/framework.md` — the `servicenow` adapter: g_form hooking, iframes, what it proves
 - `references/database.md` — the backend lane: audit triggers over a live dev database
 - `references/reading-traces.md` — how to merge the lanes and read the causal chain

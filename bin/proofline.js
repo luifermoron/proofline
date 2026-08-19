@@ -11,8 +11,9 @@
  * as the tool's `code` argument.
  *
  * Usage:
- *   proofline arm [lanes...] [options]   lanes: browser frontend-state dom all
- *                                     (aliases: react, redux, state → frontend-state)
+ *   proofline arm [lanes...] [options]   lanes: browser frontend-state dom framework all
+ *                                     (aliases: react, redux, state → frontend-state;
+ *                                      servicenow, gform → framework)
  *                                     default: browser frontend-state
  *   proofline read [filter]              filter: regex over event type, e.g. "net-|store-"
  *   proofline disarm
@@ -39,10 +40,10 @@
 const fs = require("fs");
 const path = require("path");
 
-const VALID_LANES = ["browser", "frontend-state", "dom", "all"];
+const VALID_LANES = ["browser", "frontend-state", "dom", "framework", "all"];
 // Lanes are named after the question they answer, not the library that answers it. Humans still say
 // "react", so it is accepted as input and resolved to the lane it means.
-const LANE_ALIASES = { react: "frontend-state", redux: "frontend-state", state: "frontend-state" };
+const LANE_ALIASES = { react: "frontend-state", redux: "frontend-state", state: "frontend-state", servicenow: "framework", gform: "framework" };
 const PROBE_PATH = path.join(__dirname, "..", "scripts", "probe.js");
 
 function readProbeSource() {
@@ -92,13 +93,22 @@ function buildArmSnippet(options) {
 	// The configuration prelude is prepended to the init script rather than written once from the
 	// machine side, so it is re-applied on every load. A page that clears its own storage on logout
 	// would otherwise silently drop the probe back to defaults mid-session.
+	//
+	// It deliberately does NOT clear `__proofline_off`. That key is the kill switch, and the probe reads
+	// it at document-start on every load; a prelude that cleared it would run first and wipe it, so
+	// `disarm` could set the flag, reload, and watch the probe reinstall itself. The flag is cleared
+	// once from the machine side by `arm` instead — see the snippet below.
 	const prelude = [
 		"try {",
+		// The prelude runs ahead of the probe's own kill-switch check, so it has to honour the switch
+		// itself — otherwise a disarmed probe still rewrites its configuration keys on every load, and
+		// `disarm` can never report a clean page.
+		"\tif (localStorage.getItem('__proofline_off') !== '1') {",
 		"\tlocalStorage.setItem('__proofline_lanes', " + JSON.stringify(lanes.join(",")) + ");",
 		options.selector ? "\tlocalStorage.setItem('__proofline_dom_selector', " + JSON.stringify(options.selector) + ");" : "",
 		options.slices ? "\tlocalStorage.setItem('__proofline_slices', " + JSON.stringify(options.slices) + ");" : "",
 		options.max ? "\tlocalStorage.setItem('__proofline_max', " + JSON.stringify(options.max) + ");" : "",
-		"\tlocalStorage.removeItem('__proofline_off');",
+		"\t}",
 		"} catch (e) {}"
 	]
 		.filter(Boolean)
@@ -112,7 +122,7 @@ function buildArmSnippet(options) {
 	// has to re-arm by hand each time. Offered because some teams cannot enable the unsafe tool at
 	// all, not because it is an equivalent mode.
 	if (options.noPersist) {
-		return ["// NO-PERSIST MODE — paste into browser_evaluate, not browser_run_code_unsafe.", "// The log will NOT survive reloads, route changes or login. Re-arm after each navigation.", "() => {", "\ttry {", "\t\tlocalStorage.removeItem('__proofline_log');", "\t\tlocalStorage.removeItem('__proofline_epoch');", "\t} catch (e) {}", "", indent(initScript), "", "\treturn {", "\t\tinstalled: !!window.__proofline,", "\t\tlanes: window.__proofline ? window.__proofline.lanes : null,", "\t\tpersistent: false,", "\t\turl: location.href", "\t};", "}"].join("\n");
+		return ["// NO-PERSIST MODE — paste into browser_evaluate, not browser_run_code_unsafe.", "// The log will NOT survive reloads, route changes or login. Re-arm after each navigation.", "() => {", "\ttry {", "\t\tlocalStorage.removeItem('__proofline_off');", "\t\tlocalStorage.removeItem('__proofline_log');", "\t\tlocalStorage.removeItem('__proofline_epoch');", "\t} catch (e) {}", "", indent(initScript), "", "\treturn {", "\t\tinstalled: !!window.__proofline,", "\t\tlanes: window.__proofline ? window.__proofline.lanes : null,", "\t\tpersistent: false,", "\t\turl: location.href", "\t};", "}"].join("\n");
 	}
 
 	// `addInitScript` is registered on the *context*, not the page: that is what makes the probe
@@ -125,18 +135,22 @@ function buildArmSnippet(options) {
 		"async (page) => {",
 		"\tconst SRC = " + JSON.stringify(initScript) + ";",
 		"",
-		options.keep
-			? "\t// --keep: existing log and epoch retained, new events append to the current run."
-			: [
-					"\t// A previous run's keys survive in localStorage, and reusing its epoch would stamp",
-					"\t// new events as offsets from a session that happened days ago. Start clean.",
-					"\tawait page.evaluate(() => {",
-					"\t\ttry {",
-					"\t\t\tlocalStorage.removeItem('__proofline_log');",
-					"\t\t\tlocalStorage.removeItem('__proofline_epoch');",
-					"\t\t} catch (e) {}",
-					"\t});"
-			  ].join("\n"),
+		[
+			"\t// Clearing the kill switch is arming's job, not the init script's: the probe checks this key at document-start, so anything that cleared it on",
+			"\t// every load would defeat `disarm`. Done once, here, from the machine side.",
+			options.keep
+				? "\t// --keep: existing log and epoch retained, new events append to the current run."
+				: "\t// A previous run's keys also survive in localStorage, and reusing its epoch would stamp new events as offsets from a session days old.",
+			"\tawait page.evaluate(() => {",
+			"\t\ttry {",
+			"\t\t\tlocalStorage.removeItem('__proofline_off');",
+			options.keep ? "" : "\t\t\tlocalStorage.removeItem('__proofline_log');",
+			options.keep ? "" : "\t\t\tlocalStorage.removeItem('__proofline_epoch');",
+			"\t\t} catch (e) {}",
+			"\t});"
+		]
+			.filter(Boolean)
+			.join("\n"),
 		"",
 		"\tawait page.context().addInitScript({ content: SRC });",
 		"",
@@ -155,6 +169,7 @@ function buildArmSnippet(options) {
 		"\t\tinstalled: !!window.__proofline,",
 		"\t\tlanes: window.__proofline ? window.__proofline.lanes : null,",
 		"\t\tstateAdapter: window.__store ? 'redux' : null,",
+		"\t\tframeworkAdapter: window.g_form ? 'servicenow' : null,",
 		"\t\tevents: window.__proofline ? window.__proofline.get().length : 0,",
 		"\t\turl: location.href",
 		"\t}));",
@@ -177,7 +192,30 @@ function buildDisarmSnippet() {
 	// The kill switch is a storage flag rather than an unhook: the probe wraps fetch, console and
 	// history, and unwrapping them safely is impossible once other code has wrapped them in turn.
 	// The flag makes the next load a no-op, which is the only clean stop.
-	return ["// Runs in the MCP server's Node process (browser_run_code_unsafe). Read before pasting.", "async (page) => {", "\tawait page.evaluate(() => {", "\t\ttry {", "\t\t\tlocalStorage.setItem('__proofline_off', '1');", "\t\t\tlocalStorage.removeItem('__proofline_log');", "\t\t\tlocalStorage.removeItem('__proofline_epoch');", "\t\t} catch (e) {}", "\t});", "\tawait page.reload();", "\treturn await page.evaluate(() => ({ disarmed: !window.__proofline }));", "}"].join("\n");
+	return [
+		"// Runs in the MCP server's Node process (browser_run_code_unsafe). Read before pasting.",
+		"async (page) => {",
+		"\t// The init script stays registered on the context — Playwright offers no way to remove one — so disarming works by the kill switch the probe checks",
+		"\t// at document-start. Nothing may clear that key on load, which is why arm clears it from the machine side instead of from the prelude.",
+		"\tawait page.evaluate(() => {",
+		"\t\ttry {",
+		"\t\t\tlocalStorage.setItem('__proofline_off', '1');",
+		"\t\t\t['__proofline_log', '__proofline_epoch', '__proofline_lanes', '__proofline_dom_selector', '__proofline_slices', '__proofline_max'].forEach((key) => localStorage.removeItem(key));",
+		"\t\t} catch (e) {}",
+		"\t});",
+		"\tawait page.reload();",
+		"",
+		"\t// Verified rather than assumed: a probe that reinstalled itself would still leave these wrappers in place, and reporting `disarmed` off the sentinel",
+		"\t// alone would call that a success.",
+		"\treturn await page.evaluate(() => ({",
+		"\t\tdisarmed: !window.__proofline && !window.fetch.__prooflineWrapped && !console.error.__prooflineWrapped,",
+		"\t\tsentinel: !window.__proofline,",
+		"\t\tfetchWrapped: !!window.fetch.__prooflineWrapped,",
+		"\t\tconsoleWrapped: !!console.error.__prooflineWrapped,",
+		"\t\tleftoverKeys: Object.keys(localStorage).filter((key) => key.indexOf('__proofline') === 0)",
+		"\t}));",
+		"}"
+	].join("\n");
 }
 
 function printUsage() {

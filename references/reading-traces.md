@@ -59,10 +59,23 @@ Each of these breaks tells you something different:
 |---|---|
 | `click` present, no `state-change` | the handler never ran — wrong element, disabled, or the listener was not attached |
 | `state-change` but no `net-request` | the client short-circuited; look for a guard or a dirty-check |
+| a field changed with no `framework-call` | nothing asked the framework to do it — suspect the render path, not a script |
 | `net-request` with no `net-response` | in flight, aborted, or the page navigated away mid-call |
 | `net-response 200` then a wrong value | the payload is the problem, or a reducer overwrote it — read `net-error-body` / the store slice |
 | `state-change` but no `dom-added` | state is right, the render is not — a memo, a key, or a selector |
 | `dom-added` then `dom-removed` milliseconds later | it rendered and something unmounted it; look at what fired between |
+
+## Check the name before you trust a null
+
+In a real investigation the trace kept reporting that a status field was empty and had no options,
+and three rounds of diagnosis went into why it failed to load. It had not failed. The field the form
+actually used was named differently from the label shown on screen; it held the correct value the
+whole time, and every probe had been asking for the name from the label, which did not exist as a
+field. The `null` was accurate and the conclusion drawn from it was not.
+
+Before reading absence as failure, confirm the selector, field name or slice name actually exists —
+`framework-adapter` logs the table, `state-adapter` logs the slice names, and one `browser_evaluate`
+confirms a selector matches. A null from a wrong name looks exactly like a null from a real bug.
 
 ## The two things worth being careful about
 

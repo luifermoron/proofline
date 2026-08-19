@@ -1,4 +1,4 @@
-# proofline
+# Proofline
 
 ### One clock. Every layer. Follow the proof: find the bug or understand how it works.
 
@@ -12,10 +12,16 @@ That timeline is the deliverable, and it serves two jobs equally well:
   millisecond. No more bisecting by hypothesis.
 - 🔍 **Learning how something works** — click through a feature once and read back what the code
   really does: which endpoints, which state, in which order. Faster and more accurate than reading
-  the source, because it is the source *executing*.
+  the source, because it is the source _executing_.
 
-Useful to a human, but written for an agent: the output is JSON on one axis, so an agent can filter
-it, correlate it and cite exact timestamps instead of guessing from the code.
+**You direct, the agent investigates.** You drive the app — navigate, log in, reproduce. proofline
+records. The agent then reads the trace, follows it into the code, and comes back with something
+concrete: a proposed fix, or an explanation of how the thing actually works. What happens next is
+your call — apply it, ask for the call trace end to end, or keep pulling the thread.
+
+Nothing here automates your clicks, and that is deliberate: it is why proofline works on screens an
+agent cannot reach on its own — SSO, multi-step flows, real data. The output is JSON on one axis, so
+the agent can filter it, correlate it and cite exact timestamps instead of guessing from the code.
 
 A Claude Code [skill](https://docs.claude.com/en/docs/claude-code/skills) plus the probe it installs.
 It turns "the field goes blank sometimes" into `value-changed at t=3120, 40ms after the getRecord
@@ -30,7 +36,7 @@ lane with no available adapter says so and stays quiet, rather than failing.
 ## 🎯 Why
 
 **Precision about what actually ran.** Knowing the codebase does not help here — familiarity tells
-you what the code *can* do, never what it *did* on this click, in this order, at this millisecond.
+you what the code _can_ do, never what it _did_ on this click, in this order, at this millisecond.
 The author of a module is as blind to the sequence as a newcomer; they just have better guesses.
 Reading the source produces plausible theories, and plausible theories are exactly what costs
 afternoons.
@@ -46,7 +52,7 @@ click, the state change, the HTTP response and the DOM mutation merge into one s
 **every layer** on a single axis — and the causal story reads across them instead of within one.
 
 **The log survives reloads, SPA route changes, full URL changes, logins and new tabs.** The probe is
-registered on the Playwright browser *context* through `addInitScript`, so it reinstalls itself
+registered on the Playwright browser _context_ through `addInitScript`, so it reinstalls itself
 before application code on every load, and events buffer to `localStorage` against one shared epoch.
 This matters more than it sounds: the events immediately around a navigation are usually the ones
 being investigated, and a `window`-based buffer loses exactly those.
@@ -55,12 +61,12 @@ being investigated, and a `window`-based buffer loses exactly those.
 
 ## 📋 Prerequisites
 
-| | |
-|---|---|
-| **Node.js** | 18+ — only for the CLI that builds the snippets. No dependencies, nothing to install. |
-| **Playwright MCP** | The [`@playwright/mcp`](https://github.com/microsoft/playwright-mcp) server, connected to your agent. |
+|                               |                                                                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Node.js**                   | 18+ — only for the CLI that builds the snippets. No dependencies, nothing to install.                                                |
+| **Playwright MCP**            | The [`@playwright/mcp`](https://github.com/microsoft/playwright-mcp) server, connected to your agent.                                |
 | **`browser_run_code_unsafe`** | Must be enabled on that MCP server — see the trade-off below. Only needed to arm and disarm; without it you get `--no-persist` mode. |
-| **A database MCP** | *Optional*, only for the database lane — [`dbhub`](https://github.com/bytebase/dbhub) or any `execute_sql` tool. |
+| **A database MCP**            | _Optional_, only for the database lane — [`dbhub`](https://github.com/bytebase/dbhub) or any `execute_sql` tool.                     |
 
 Check the Playwright MCP is connected by asking your agent to list its tools; you need
 `browser_navigate`, `browser_evaluate`, `browser_network_requests`, `browser_console_messages`, and
@@ -75,12 +81,12 @@ this tool disabled by policy.
 
 JavaScript can run in two separate places, and they are not equivalent:
 
-| | `browser_evaluate` | `browser_run_code_unsafe` |
-|---|---|---|
-| Runs in | the **page's** JS context | the **MCP server's Node process** |
-| Permissions | those of any web page | **yours** — full filesystem, `child_process` |
-| Has `page` / `context` | no | yes |
-| Can survive a reload | no | yes, via `addInitScript` |
+|                        | `browser_evaluate`        | `browser_run_code_unsafe`                    |
+| ---------------------- | ------------------------- | -------------------------------------------- |
+| Runs in                | the **page's** JS context | the **MCP server's Node process**            |
+| Permissions            | those of any web page     | **yours** — full filesystem, `child_process` |
+| Has `page` / `context` | no                        | yes                                          |
+| Can survive a reload   | no                        | yes, via `addInitScript`                     |
 
 `page.context().addInitScript()` is a **`BrowserContext`** method, so it only exists in the server
 process. There is no in-page API meaning "run this on the next load" — that would be a browser
@@ -128,7 +134,7 @@ equivalent one.
 Clone, then link the skill into Claude Code:
 
 ```bash
-git clone <this-repo> ~/Projects/proofline
+git clone https://github.com/luifermoron/proofline.git ~/Projects/proofline
 
 # available in every project
 ln -s ~/Projects/proofline ~/.claude/skills/proofline
@@ -146,7 +152,7 @@ chmod +x ~/Projects/proofline/bin/proofline.js
 ln -s ~/Projects/proofline/bin/proofline.js /usr/local/bin/proofline
 ```
 
-Verify Claude Code sees it: run `/skill-doctor`, or just say *"arm proofline"* and check it loads
+Verify Claude Code sees it: run `/skill-doctor`, or just say _"arm proofline"_ and check it loads
 `proofline` rather than improvising.
 
 ---
@@ -159,7 +165,7 @@ Talk to the agent. The skill handles the mechanics.
 you:    open the app at localhost:3000
 agent:  [opens browser] navigate to the screen and log in, tell me when to arm.
 
-you:    arm browser and react
+you:    arm browser and redux           ← "redux" is an alias for the frontend-state lane
 agent:  [runs `proofline arm browser frontend-state`, pastes the snippet]
         Armed — browser + frontend-state (redux). Reload, navigate, log in, the log
         survives all of it. Do the thing that breaks, then tell me.
@@ -197,48 +203,70 @@ agent:  [correlates the browser lane with the server, on the same axis]
 you:    ok apply (b) then, and disarm
 ```
 
-Note the shape of that exchange: **proofline produces the evidence, the agent proposes, you
-decide.** The trace is what turns "I think it's the reducer" into a line number and a millisecond —
-but whether to patch the frontend, fix the backend, or keep pulling the thread stays your call. Ask
-for a call trace summary at any point; it is the same log, read at a different altitude.
+Every agent turn there ends the same way: with evidence and an option, not with a commit. The trace
+is what turns "I think it's the reducer" into a line number and a millisecond — and it is precisely
+because the evidence is that specific that the decision can stay yours. Ask for the call trace at
+any point; it is the same log, read at a different altitude.
 
 ### What "arm ..." maps to
 
-| You say | Lanes armed |
-|---|---|
-| `arm everything` / `arm all` | browser + frontend-state + dom |
-| `arm browser and react` | browser + frontend-state |
-| `arm the probes` / `start logging` | browser + frontend-state (the default) |
-| `arm the browser` | browser only |
-| `arm the database` | SQL audit triggers — a separate, explicit mechanism |
+| You say                            | Lanes armed                                         |
+| ---------------------------------- | --------------------------------------------------- |
+| `arm everything` / `arm all`       | browser + frontend-state + dom                      |
+| `arm browser and react` / `redux`  | browser + frontend-state                            |
+| `arm the probes` / `start logging` | browser + frontend-state (the default)              |
+| `arm the browser`                  | browser only                                        |
+| `arm servicenow`                   | browser + framework                                 |
+| `arm the database`                 | SQL audit triggers — a separate, explicit mechanism |
 
 ### The lanes
 
 - 🌐 **browser** — clicks, `fetch` + `XMLHttpRequest` with status/duration/error bodies, `console.error`
-  and `warn`, uncaught errors and promise rejections, SPA route changes. *Persistent.*
-- 🧠 **frontend-state** — *what data changed, and when.* Ships the `redux` adapter: walks the fiber
+  and `warn`, uncaught errors and promise rejections, SPA route changes. _Persistent._
+- 🧠 **frontend-state** — _what data changed, and when._ Ships the `redux` adapter: walks the fiber
   tree to the store (no code change, no DevTools) and subscribes rather than wrapping `dispatch`.
-  Aliases: `react`, `redux`, `state`. *Persistent.*
+  Aliases: `react`, `redux`, `state`. _Persistent._
 - 🧬 **dom** — MutationObserver for mount/unmount and visibility, plus a 100ms value poll over a CSS
-  selector you supply. Noisy; opt in. *Persistent.*
-- 🗄️ **database** — *what rows changed, and in what order.* Postgres audit triggers capturing every
-  row version with `txid` and `backend_pid`.
-  Manual SQL, dev databases only. See `references/database.md`.
+  selector you supply. Noisy; opt in. _Persistent._
+- 🔧 **framework** — _what the framework itself was told to do, and by whom._ Ships the `servicenow`
+  adapter: wraps 15 `g_form` methods (`setDisplay`, `setValue`, `setSectionDisplay`…) and records each
+  call with its stack, plus `g_scratchpad`. Aliases: `servicenow`, `gform`. _Persistent._
+- 🗄️ **database** — _what rows changed, and in what order._ Postgres audit triggers capturing every
+  row version with `txid` and `backend_pid`. Manual SQL, dev databases only. See
+  `references/database.md`.
+
+### What an event looks like
+
+```json
+{ "t": 3010, "load": "k29fx1", "at": "/records/abc", "type": "state-change",  "adapter": "redux", "changed": "form", "state": { "form": "{\"status\":\"Open\"…" } }
+{ "t": 3080, "load": "k29fx1", "at": "/records/abc", "type": "net-response",  "method": "GET", "url": "/api/record/abc", "status": 200, "ms": 91 }
+{ "t": 3120, "load": "k29fx1", "at": "/records/abc", "type": "value-changed", "el": "status", "from": "Open", "to": "" }
+```
+
+The first four fields are the same on every event, whichever lane emitted it. `t` is milliseconds
+since arming — the shared axis, and the reason these three lines can be read as one story. `load`
+changes on each page load and `at` records the route, so a log spanning navigations stays readable.
+Everything after `type` is lane-specific; `adapter` names the mechanism that produced the event, and
+long values are truncated rather than dropped.
 
 ---
 
 ## 🛠️ CLI
 
 The CLI never touches the browser and never executes anything. It prints a snippet to stdout that
-you (or the agent) paste as the `code` argument of `browser_run_code_unsafe` — the MCP sandbox has no
-filesystem access, so the probe has to arrive inline.
+you (or the agent) paste as the `code` argument of `browser_run_code_unsafe` — or of
+`browser_evaluate`, for `read`, `summary` and `--no-persist`. The MCP sandbox has no filesystem
+access, so the probe has to arrive inline.
 
 Printing rather than running is deliberate: the emitted snippet is short, deterministic and fetches
 nothing, so **you can read it before you paste it**. Every snippet carries a one-line header saying
 which tool it targets and what it runs in.
 
 ```bash
-proofline arm [lanes...] [options]    # lanes: browser react dom all   (default: browser react)
+proofline arm [lanes...] [options]    # browser frontend-state dom framework all
+                                      # default: browser frontend-state
+                                      # aliases: react, redux, state → frontend-state
+                                      #          servicenow, gform  → framework
 proofline read [filter]               # filter is a regex over event type
 proofline summary                     # counts by type, number of loads, span — read this first
 proofline disarm
@@ -246,13 +274,13 @@ proofline disarm
 
 ### Configuration
 
-| Option | Effect |
-|---|---|
-| `--selector='#status, [name$=".state"]'` | elements the `dom` lane polls for value changes. Keep it narrow. |
-| `--slices=form,navigation` | state slices to snapshot in full. Default: every slice, shallow. |
-| `--max=8000` | retained events (default 4000, oldest dropped first) |
-| `--keep` | append to the existing run instead of starting a fresh epoch |
-| `--no-persist` | emit a `browser_evaluate` snippet instead — no unsafe tool, no reload survival |
+| Option                                   | Effect                                                                         |
+| ---------------------------------------- | ------------------------------------------------------------------------------ |
+| `--selector='#status, [name$=".state"]'` | elements the `dom` lane polls for value changes. Keep it narrow.               |
+| `--slices=form,navigation`               | state slices to snapshot in full. Default: every slice, shallow.               |
+| `--max=8000`                             | retained events (default 4000, oldest dropped first)                           |
+| `--keep`                                 | append to the existing run instead of starting a fresh epoch                   |
+| `--no-persist`                           | emit a `browser_evaluate` snippet instead — no unsafe tool, no reload survival |
 
 ```bash
 proofline arm all --selector='[data-testid="amount"]' --slices=cart,checkout --max=8000
@@ -264,13 +292,13 @@ proofline read 'net-|state-change'
 Set in the browser console or via `browser_evaluate`; read fresh on every load, so they survive
 reloads like everything else:
 
-| Key | Effect |
-|---|---|
-| `localStorage.__proofline_off = '1'` | kill switch — the probe no-ops from the next load |
-| `localStorage.__proofline_lanes` | csv of active lanes |
-| `localStorage.__proofline_dom_selector` | the `dom` lane's selector |
-| `localStorage.__proofline_slices` | csv of slices to snapshot in full |
-| `localStorage.__proofline_max` | retained event cap |
+| Key                                     | Effect                                            |
+| --------------------------------------- | ------------------------------------------------- |
+| `localStorage.__proofline_off = '1'`    | kill switch — the probe no-ops from the next load |
+| `localStorage.__proofline_lanes`        | csv of active lanes                               |
+| `localStorage.__proofline_dom_selector` | the `dom` lane's selector                         |
+| `localStorage.__proofline_slices`       | csv of slices to snapshot in full                 |
+| `localStorage.__proofline_max`          | retained event cap                                |
 
 ### In-page API
 
@@ -280,7 +308,7 @@ window.__proofline.get('net-')         // filtered by regex over type
 window.__proofline.summary()           // counts, loads, span
 window.__proofline.clear()             // drop the log and the epoch
 window.__proofline.log('note', { … })  // add your own event on the shared clock
-window.__store                     // the Redux store, once the frontend-state lane attaches
+window.__store                         // the Redux store, once frontend-state attaches
 ```
 
 ---
@@ -301,7 +329,12 @@ window.__store                     // the Redux store, once the frontend-state l
 - **No lane proves a re-render happened.** `state-change` says the data changed, `dom-added` says
   something reached the screen; neither says React committed. A `render` lane would, and is not
   implemented.
-- **Cross-origin iframes are unreachable.** Nothing here changes that.
+- **Arming twice in one browser context stacks init scripts**, and Playwright cannot unregister one.
+  The first registration keeps its wrappers and its lanes; the second only rewrites the stored
+  configuration. The probe logs `probe-config-ignored` when it detects this — **disarm before
+  re-arming with different lanes.**
+- **Same-origin frames each run their own probe** and write their own log key; reads merge them and
+  events carry a `frame` field. **Cross-origin frames are unreachable.** Nothing here changes that.
 
 ---
 

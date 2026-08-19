@@ -17,7 +17,8 @@
  * Kill switch:   localStorage.__proofline_off = '1'   (then reload)
  *
  * Configuration keys (all optional, all read fresh on every load):
- *   __proofline_lanes         csv of enabled lanes: browser,frontend-state,dom   (default "browser")
+ *   __proofline_lanes         csv of enabled lanes: browser,frontend-state,dom,framework
+ *                             (default "browser")
  *   __proofline_dom_selector  CSS selector the dom lane watches for value changes (default none)
  *   __proofline_slices        csv of state slice names to snapshot (default: all top-level slices)
  *   __proofline_max           max retained events (default 4000)
@@ -55,16 +56,53 @@
 		} catch (e) {}
 	}
 
+	// Index within the parent, not a random id: it has to be stable across reloads or every load would
+	// leak another log key. A cross-origin parent throws on access, so that case falls back to a random
+	// id and simply accepts the leak — it is rare, and losing events is worse.
+	function detectFrameId() {
+		try {
+			if (window.top === window.self) {
+				return "top";
+			}
+			const siblings = window.parent.frames;
+			for (let i = 0; i < siblings.length; i += 1) {
+				if (siblings[i] === window.self) {
+					return "f" + i;
+				}
+			}
+		} catch (e) {}
+		return "x" + Math.random().toString(36).slice(2, 6);
+	}
+
 	if (lsGet("__proofline_off") === "1") {
 		return;
 	}
 	if (window.__proofline) {
+		// A second `arm` in the same browser context stacks another init script — Playwright offers no
+		// way to unregister one. The stacked script's prelude has already rewritten the configuration
+		// keys by the time it gets here, but the wrappers belong to the first script and cannot be
+		// replaced, so the new configuration is silently ignored. Saying so beats letting localStorage
+		// advertise lanes that are not running.
+		try {
+			const requested = lsGet("__proofline_lanes") || "";
+			const active = window.__proofline.lanes.join(",");
+			if (requested !== active) {
+				window.__proofline.log("probe-config-ignored", { active, requested, fix: "disarm first, then arm again" });
+			}
+		} catch (e) {}
 		return;
 	}
 
 	/* ------------------------------------------------------------------- config */
 
-	const LOG_KEY = "__proofline_log";
+	// Every same-origin frame runs its own copy of this probe (addInitScript is evaluated in each
+	// frame), and they all share one localStorage. A single log key therefore means two frames doing
+	// read-concat-write at the same time, and the later write silently drops the earlier one — losing
+	// exactly the form-iframe events worth having. Each frame writes its own key instead, and reads
+	// merge every key back together.
+	const LOG_PREFIX = "__proofline_log";
+	const FRAME_ID = detectFrameId();
+	const LOG_KEY = FRAME_ID === "top" ? LOG_PREFIX : LOG_PREFIX + "__" + FRAME_ID;
 	const EPOCH_KEY = "__proofline_epoch";
 	const FLUSH_MS = 1000;
 	const MAX_EVENTS = Number(lsGet("__proofline_max")) || 4000;
@@ -108,6 +146,9 @@
 					// Once a log spans navigations, "which screen was this?" is no longer answerable
 					// from the timestamp alone, so every event carries its own location.
 					at: location.pathname + location.search,
+					// Omitted on the top frame, which is most events: a field written on every line of a
+					// log that rarely has frames is pure weight.
+					frame: FRAME_ID === "top" ? undefined : FRAME_ID,
 					type
 				},
 				data
@@ -124,6 +165,31 @@
 		} catch (e) {
 			return [];
 		}
+	}
+
+	// Reads merge every frame's key and sort on the shared epoch, so one `get()` from any frame returns
+	// the whole picture — which is the entire point of stamping one clock.
+	function readAllFrames() {
+		const events = [];
+		try {
+			Object.keys(localStorage).forEach((key) => {
+				if (key.indexOf(LOG_PREFIX) !== 0) {
+					return;
+				}
+				try {
+					JSON.parse(localStorage.getItem(key) || "[]").forEach((event) => events.push(event));
+				} catch (e) {}
+			});
+		} catch (e) {
+			return readStored();
+		}
+		// `Object.keys` over a Storage object enumerates its keys in every real browser, but a stub or an
+		// exotic environment can return nothing — and silently reporting an empty log is the worst
+		// possible failure for a debugging tool. Fall back to this frame's own key.
+		if (events.length === 0) {
+			return readStored();
+		}
+		return events.sort((a, b) => a.t - b.t);
 	}
 
 	function flush() {
@@ -144,9 +210,10 @@
 
 	window.__proofline = {
 		lanes: LANES,
+		frame: FRAME_ID,
 		get(filter) {
 			flush();
-			const all = readStored();
+			const all = readAllFrames();
 			if (!filter) {
 				return all;
 			}
@@ -155,16 +222,23 @@
 		},
 		summary() {
 			flush();
-			const all = readStored();
+			const all = readAllFrames();
 			const counts = {};
 			all.forEach((e) => {
 				counts[e.type] = (counts[e.type] || 0) + 1;
 			});
-			return { total: all.length, loads: all.reduce((acc, e) => (acc.indexOf(e.load) === -1 ? acc.concat(e.load) : acc), []).length, spanMs: all.length ? all[all.length - 1].t - all[0].t : 0, counts, lanes: LANES };
+			const frames = all.reduce((acc, e) => (acc.indexOf(e.frame || "top") === -1 ? acc.concat(e.frame || "top") : acc), []);
+			return { total: all.length, loads: all.reduce((acc, e) => (acc.indexOf(e.load) === -1 ? acc.concat(e.load) : acc), []).length, frames, spanMs: all.length ? all[all.length - 1].t - all[0].t : 0, counts, lanes: LANES };
 		},
 		clear() {
 			buffer = [];
-			lsRemove(LOG_KEY);
+			try {
+				Object.keys(localStorage)
+					.filter((key) => key.indexOf(LOG_PREFIX) === 0)
+					.forEach(lsRemove);
+			} catch (e) {
+				lsRemove(LOG_KEY);
+			}
 			lsRemove(EPOCH_KEY);
 			return true;
 		},
@@ -374,6 +448,85 @@
 					log("state-change", { adapter: "redux", changed: changed.join(","), state: detail });
 				} catch (e) {}
 			});
+		}, 250);
+	}
+
+	/* ============================================================== framework lane */
+
+	// Answers "what did the application framework itself do, and who asked for it?" — the question the
+	// other lanes structurally cannot reach. `dom` sees a field go blank; this sees the setDisplay call
+	// that blanked it, with the stack of whatever script made it. On a real investigation that was the
+	// difference between "the fields are hidden" and "one script hid four legacy fields and showed six
+	// new ones in the same millisecond".
+	//
+	// Adapter: servicenow (window.g_form). ServiceNow Classic renders the form in an iframe, so this
+	// relies on the probe running in every frame — each frame hooks its own g_form.
+	if (laneOn("framework")) {
+		const GFORM_METHODS = ["setValue", "clearValue", "setDisplay", "setVisible", "setReadOnly", "setMandatory", "setSectionDisplay", "addOption", "removeOption", "clearOptions", "setLabelOf", "hideRelatedList", "showFieldMsg", "clearMessages", "addErrorMessage"];
+
+		let frameworkPolls = 0;
+		const frameworkTimer = setInterval(() => {
+			frameworkPolls += 1;
+			if (frameworkPolls > 240) {
+				clearInterval(frameworkTimer);
+				log("framework-adapter-missing", { polls: frameworkPolls, tried: "servicenow" });
+				return;
+			}
+
+			// The global appears well after document-start, and on the login screen it never appears at
+			// all — so this polls rather than assuming, exactly like the state lane.
+			const gForm = window.g_form;
+			if (!gForm || typeof gForm.setValue !== "function") {
+				return;
+			}
+
+			clearInterval(frameworkTimer);
+
+			let table = "";
+			try {
+				table = gForm.getTableName();
+			} catch (e) {}
+			log("framework-adapter", { adapter: "servicenow", polls: frameworkPolls, table, uniqueValue: (function () {
+				try {
+					return gForm.getUniqueValue();
+				} catch (e) {
+					return "";
+				}
+			})() });
+
+			// Server-seeded state: for "the value is right but the widget is blank" bugs this is often the
+			// whole answer, because it is what the client actually rendered from. Captured once — it does
+			// not change after form load.
+			try {
+				if (window.g_scratchpad) {
+					log("framework-scratchpad", { adapter: "servicenow", keys: Object.keys(window.g_scratchpad).join(","), value: trunc(JSON.stringify(window.g_scratchpad), 1200) });
+				}
+			} catch (e) {}
+
+			GFORM_METHODS.forEach((name) => {
+				const orig = gForm[name];
+				if (typeof orig !== "function" || orig.__prooflineWrapped) {
+					return;
+				}
+				const wrapped = function () {
+					try {
+						const args = Array.prototype.slice.call(arguments);
+						log("framework-call", {
+							adapter: "servicenow",
+							method: name,
+							args: trunc(args.map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a))).join(", "), 240),
+							// The whole reason this lane exists: not that something changed, but which
+							// script changed it. Frames 2-6 skip the wrapper itself and land on the caller.
+							stack: trunc((new Error().stack || "").split("\n").slice(2, 7).join(" | "), 500)
+						});
+					} catch (e) {}
+					return orig.apply(this, arguments);
+				};
+				wrapped.__prooflineWrapped = true;
+				gForm[name] = wrapped;
+			});
+
+			log("framework-hooked", { adapter: "servicenow", methods: GFORM_METHODS.length });
 		}, 250);
 	}
 
